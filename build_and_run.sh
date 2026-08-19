@@ -29,4 +29,4 @@ arm-none-eabi-g++ \
 echo "✅ Generated build/firmware.elf"
 echo "🚀 Spawning Renode..."
 
-renode board.resc
+renode --disable-gui --console board.resc
