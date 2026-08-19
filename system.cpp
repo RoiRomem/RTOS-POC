@@ -1,5 +1,4 @@
 #include <cstdint>
-#include <queue>
 
 struct TCB
 {
@@ -14,20 +13,28 @@ static TCB taskB_tcb{ &stackB[256] };
 
 TCB* current_tcb = nullptr;
 
-class TCB_controller
-{  
-  std::queue<TCB> que = [taskA_tcb, taskA_tcb];
+class TCBController 
+{
+private:
+    TCB* queue[2];
+    uint8_t head = 0;
+    uint8_t capacity = 2;
 
-  TCB get_next_tcb()
-  {
-    TCB curr_tcb = que.pop();
-    TCB prev_tcb = que.pop();
+public:
+    TCBController(TCB* t1, TCB* t2) 
+    {
+        queue[0] = t1;
+        queue[1] = t2;
+    }
 
-    que.push()
-  }
+    TCB* get_next_tcb() 
+    {
+      head = (head + 1) % capacity;
+      return queue[head];
+    }
 };
 
-TCB_controller TCB_controller;
+static TCBController g_tcb_controller(&taskA_tcb, &taskB_tcb);
 
 void taskA()
 {
@@ -82,7 +89,7 @@ extern "C"
 
   void get_next_tcb()
   {
-
+    current_tcb = TCB_controller::get_next_tcb();
   }
 
   void printChar(char c) 
