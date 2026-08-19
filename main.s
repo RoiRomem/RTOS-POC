@@ -24,7 +24,7 @@ vector_table:
     .word 0                @ 12: DebugMon
     .word 0                @ 13: Reserved
     .word PendSV_Handler   @ 14: PendSV Handler 
-    .word 0                @ 15: SysTick 
+    .word SysTick_Handler  @ 15: SysTick 
 
 /* reset Handler Code */
 .section .text
@@ -41,7 +41,7 @@ hang:
 
 .align 2
 .thumb_func
-.type PendSV_Handler %function
+.type PendSV_Handler, %function
 
 PendSV_Handler:
   cpsid i @ stop interruput
@@ -72,3 +72,12 @@ restore_context:
   ldr lr, =0xFFFFFFFD
   bx lr
 
+.align 2 
+.thumb_func
+.type SysTick_Handler, %function
+
+SysTick_Handler:
+  ldr r0, =0xE000ED04 @ ICSR register address
+  ldr r1, =(1 << 28) @ PENDSVSET bit mask
+  str r1, [r0] @ Set PendSV to pending
+  bx lr
