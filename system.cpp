@@ -1,5 +1,16 @@
 #include <cstdint>
 
+#define SCB_SHPR3_PENDSV    (*(volatile uint8_t*) 0xE000ED22)
+#define SYSTICK_CTRL        (*(volatile uint32_t*)0xE000E010)
+#define SYSTICK_LOAD        (*(volatile uint32_t*)0xE000E014)
+#define SYSTICK_VAL         (*(volatile uint32_t*)0xE000E018)
+
+#define SYSTICK_ENABLE      (1 << 0)
+#define SYSTICK_TICKINT     (1 << 1)
+#define SYSTICK_CLKSOURCE   (1 << 2)
+
+#define NUMS 1000
+
 struct TCB
 {
     uint32_t* sp;
@@ -36,28 +47,6 @@ public:
 
 static TCBController g_tcb_controller(&taskA_tcb, &taskB_tcb);
 
-void taskA()
-{
-  int i = 0;
-  while(1)
-  {
-    i = (i + 1) % 10;
-    printChar('0' + i);
-    printChar('\n');
-  }
-}
-
-void taskB()
-{
-  int i = 10;
-  while(1)
-  {
-    printChar('h');
-    printChar('i');
-    printChar('\n');
-  }
-}
-
 extern "C" 
 {
   typedef void (*task_func_t)(void);
@@ -87,9 +76,17 @@ extern "C"
       tcb->sp = sp;
   }
 
+  void rtos_init_timer(uint32_t ticks_per_quantum)
+  {
+    SCB_SHPR3_PENDSV = 0xFF;
+
+    SYSTICK_LOAD = ticks_per_quantum - 1;
+    SYSTICK_CTRL = SYSTICK_CLKSOURCE | SYSTICK_TICKINT | SYSTICK_ENABLE;
+  }
+
   void get_next_tcb()
   {
-    current_tcb = TCB_controller::get_next_tcb();
+    current_tcb = g_tcb_controller.get_next_tcb();
   }
 
   void printChar(char c) 
@@ -99,7 +96,55 @@ extern "C"
     *(volatile uint32_t*)0x40011004 = c;
   }
 
-  void printH() {
+  void printH() 
+  {
     printChar('H');
+  }
+  int main() 
+  {
+      init_task_stack(&taskA_tcb, stackA, 256, taskA);
+      init_task_stack(&taskB_tcb, stackB, 256, taskB);
+      current_tcb = &taskA_tcb;
+
+      rtos_init_timer(160000);
+
+      __asm__ volatile 
+      (
+          "msr psp, %0\n"
+           "mov r0, #2\n"
+           "msr control, r0\n"
+           "isb\n"
+           : : "r" (taskA_tcb.sp) : "r0"
+      );
+
+      taskA();
+
+      while(1) 
+      {
+        printChar('e');
+      }
+      
+      return 0;
+  }
+}
+
+void taskA()
+{
+  int i = 0;
+  for (int j = 0; j < NUMS; j++)
+  {
+    i = (i + 1) % 10;
+    printChar('0' + i);
+    printChar('\n');
+  }
+}
+
+void taskB()
+{
+  for (int j = 0; j < NUMS; j++)
+  {
+    printChar('h');
+    printChar('i');
+    printChar('\n');
   }
 }
