@@ -4,10 +4,13 @@
 
 .global Reset_Handler
 .global PendSV_Handler
+.global HardFault_Handler
+.global SysTick_Handler
 .global vector_table
 
 .extern current_tcb
 .extern get_next_tcb
+.extern main
 
 .section .isr_vector, "a", %progbits
 .align 2
@@ -15,7 +18,7 @@ vector_table:
     .word _estack          /* initial Stack Pointer (from linker.ld) */
     .word Reset_Handler    /* reset Vector (Entry Point PC) */
     .word 0                @ 2: NMI
-    .word 0                @ 3: HardFault
+    .word HardFault_Handler@ 3: HardFault
     .word 0                @ 4: MemManage
     .word 0                @ 5: BusFault
     .word 0                @ 6: UsageFault
@@ -33,11 +36,41 @@ vector_table:
 .type Reset_Handler, %function
 
 Reset_Handler:
-  @ this is basically main, nothing to do here...
+  ldr r0, =_sidata
+  ldr r1, =_sdata
+  ldr r2, =_edata
 
+  copy_loop:
+    cmp r1, r2
+    bge zero_bss_init
+    ldr r3, [r0] /* load into r3, contentss of r0 aka flash mem */
+    add r0, #4 /* advances addr by 4 (next word) */
+    str r3, [r1] /* stores contents to r1 */
+    add r1, #4 
+    b copy_loop
+
+zero_bss_init:
+  ldr r0, = _sbss
+  ldr r1, = _ebss
+
+  movs r2, #0
+  zero_bss_loop:
+    cmp r0, r1
+    bge run_main
+    str r2, [r0]
+    add r0, #4
+    b zero_bss_loop
+
+run_main:
+  bl main
 hang:
-    b hang                 /* infinite loop so CPU doesn't fall into invalid memory */
+  b hang               /* infinite loop so CPU doesn't fall into invalid memory */
 
+.align 2
+.thumb_func
+.type HardFault_Handler, %function
+HardFault_Handler:
+    b HardFault_Handler    /* Catch unexpected faults here */
 
 .align 2
 .thumb_func
@@ -52,11 +85,12 @@ PendSV_Handler:
   ldr r1, =current_tcb        @ store updated stack pointer back to current_tcb->sp
   ldr r1, [r1]
   str r0, [r1]
+  
 
 restore_context:
-  push { lr } @  save EXC_RETURN LR value before C++ function call  
+  push { r0, lr } @ save EXC_RETURN LR value (and r0 for 8-byte stack alignment) before C++ function call  
   bl get_next_tcb @ here we call use the C++ code to swap the currect task
-  pop { lr }
+  pop { r0, lr }
 
   @ now we need to load the current tcb into r0
   ldr r1, =current_tcb
@@ -81,3 +115,4 @@ SysTick_Handler:
   ldr r1, =(1 << 28) @ PENDSVSET bit mask
   str r1, [r0] @ Set PendSV to pending
   bx lr
+
